@@ -1,0 +1,29 @@
+### Get all persons
+GET http://localhost:3001/api/persons
+
+### Get info page
+GET http://localhost:3001/info
+
+### Add a new person (Should return newly created person with a unique ID)
+POST http://localhost:3001/api/persons
+Content-Type: application/json
+
+{
+  "name": "John Clayers",
+  "number": "987-654321"
+}
+
+### Add a person with an existing name (Should return error)
+POST http://localhost:3001/api/persons
+Content-Type: application/json
+
+{
+  "name": "John Clayers",
+  "number": "111-222333"
+}
+
+### Get a single person (Replace {id} with a real ID from previous response)
+GET http://localhost:3001/api/persons/3
+
+### Delete a person (Replace {id} with a real ID)
+DELETE http://localhost:3001/api/persons/2
