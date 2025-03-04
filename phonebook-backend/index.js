@@ -45,7 +45,15 @@ app.post('/api/persons', (req, res) => {
     res.status(201).json(newPerson);
 });
 
-const PORT = 3001;
+// Handle unknown routes
+app.use((req, res) => {
+    res.status(404).json({ error: 'Unknown endpoint' });
+});
+
+// Use dynamic port for deployment
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log("API routes are active.");
+
 });
