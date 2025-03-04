@@ -17,9 +17,10 @@ let persons = [
 const generateId = () => Math.floor(Math.random() * 1000000).toString();
 
 // Route to get all phonebook entries
-app.get('/api/persons', (req, res) => {
-    res.json(persons);
-});
+app.get("/", (req, res) => {
+    res.send("Backend is running!");
+  });
+  
 
 // Route to add a new phonebook entry
 app.post('/api/persons', (req, res) => {
