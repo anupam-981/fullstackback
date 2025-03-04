@@ -1,11 +1,17 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+
 const app = express();
 
 // Middleware
 app.use(express.json()); // Parse JSON request bodies
 app.use(cors()); // Enable CORS for frontend requests
 
+// Serve the frontend from 'dist' folder
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Sample phonebook data
 let persons = [
     { id: "1", name: "Arto Hellas", number: "040-123456" },
     { id: "2", name: "Ada Lovelace", number: "39-44-5323523" },
@@ -45,15 +51,14 @@ app.post('/api/persons', (req, res) => {
     res.status(201).json(newPerson);
 });
 
-// Handle unknown routes
-app.use((req, res) => {
-    res.status(404).json({ error: 'Unknown endpoint' });
+// Serve React frontend for all unknown routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 // Use dynamic port for deployment
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log("API routes are active.");
-
+    console.log(`✅ Server running on port ${PORT}`);
+    console.log("✅ API routes are active.");
 });
