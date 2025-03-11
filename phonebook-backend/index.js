@@ -1,89 +1,131 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config();
 
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-require('dotenv').config();
+const PhonebookEntry = require("./models/phonebookentry");
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ Connect to MongoDB Atlas
-const MONGODB_URI = process.env.MONGODB_URI || 'your_mongodb_connection_string_here';
+// ✅ Connect to MongoDB
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('✅ Connected to MongoDB'))
-    .catch((err) => console.error('❌ MongoDB connection error:', err));
-
-// ✅ Check for MongoDB connection status
-mongoose.connection.on('error', (err) => {
-    console.error('❌ MongoDB connection lost:', err);
-});
-mongoose.connection.on('disconnected', () => {
-    console.warn('⚠️ MongoDB disconnected! Retrying...');
-});
-mongoose.connection.on('reconnected', () => {
-    console.log('✅ MongoDB reconnected!');
+// ✅ GET all entries
+app.get("/api/persons", async (req, res) => {
+  try {
+    const entries = await PhonebookEntry.find({});
+    res.json(entries);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching contacts" });
+  }
 });
 
-// ✅ Define Mongoose Schema & Model
-const personSchema = new mongoose.Schema({
-    name: String,
-    number: String,
-});
-const Person = mongoose.model('Person', personSchema);
-
-// ✅ GET all people
-app.get('/api/people', async (req, res) => {
-    try {
-        const people = await Person.find({});
-        res.json(people);
-    } catch (error) {
-        console.error('❌ Error fetching people:', error);
-        res.status(500).json({ error: 'Internal server error' });
+// ✅ GET a single entry by ID
+app.get("/api/persons/:id", async (req, res, next) => {
+  try {
+    const entry = await PhonebookEntry.findById(req.params.id);
+    if (entry) {
+      res.json(entry);
+    } else {
+      res.status(404).json({ error: "Entry not found" });
     }
+  } catch (error) {
+    next(error); // Pass errors to middleware
+  }
 });
 
-// ✅ POST: Add a new person
-app.post('/api/people', async (req, res) => {
+// ✅ POST a new entry
+app.post("/api/persons", async (req, res, next) => {
+  try {
     const { name, number } = req.body;
+
     if (!name || !number) {
-        return res.status(400).json({ error: 'Name or number missing' });
+      return res.status(400).json({ error: "Name and number are required!" });
     }
-    
-    try {
-        const existingPerson = await Person.findOne({ name });
-        if (existingPerson) {
-            return res.status(400).json({ error: 'Name already exists' });
-        }
 
-        const person = new Person({ name, number });
-        const savedPerson = await person.save();
-        console.log(`✅ Added: ${name} - ${number}`);
-        res.json(savedPerson);
-    } catch (error) {
-        console.error('❌ Error saving person:', error);
-        res.status(500).json({ error: 'Database error' });
+    const existingEntry = await PhonebookEntry.findOne({ name });
+    if (existingEntry) {
+      existingEntry.number = number; // Update the number
+      const updatedEntry = await existingEntry.save();
+      return res.json(updatedEntry);
     }
+
+    const newEntry = new PhonebookEntry({ name, number });
+    const savedEntry = await newEntry.save();
+    res.status(201).json(savedEntry);
+  } catch (error) {
+    next(error);
+  }
 });
 
-// ✅ DELETE a person
-app.delete('/api/people/:id', async (req, res) => {
-    try {
-        const deletedPerson = await Person.findByIdAndDelete(req.params.id);
-        if (!deletedPerson) {
-            return res.status(404).json({ error: 'Person not found' });
-        }
-        console.log(`🗑️ Deleted: ${deletedPerson.name}`);
-        res.status(204).end();
-    } catch (error) {
-        console.error('❌ Error deleting person:', error);
-        res.status(500).json({ error: 'Database error' });
+// ✅ PUT - Update an entry
+app.put("/api/persons/:id", async (req, res, next) => {
+  const { name, number } = req.body;
+
+  const updatedData = { name, number };
+  try {
+    const updatedEntry = await PhonebookEntry.findByIdAndUpdate(
+      req.params.id,
+      updatedData,
+      { new: true, runValidators: true, context: "query" }
+    );
+
+    if (!updatedEntry) {
+      return res.status(404).json({ error: "Entry not found" });
     }
+
+    res.json(updatedEntry);
+  } catch (error) {
+    next(error);
+  }
 });
 
-// ✅ Start Server
+// ✅ DELETE an entry
+app.delete("/api/persons/:id", async (req, res, next) => {
+  try {
+    const deletedEntry = await PhonebookEntry.findByIdAndDelete(req.params.id);
+
+    if (!deletedEntry) {
+      return res.status(404).json({ error: "Entry not found" });
+    }
+
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ✅ /info route
+app.get("/info", async (req, res) => {
+  try {
+    const count = await PhonebookEntry.countDocuments({});
+    res.send(`
+      <p>Phonebook has info for ${count} people</p>
+      <p>${new Date()}</p>
+    `);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching data" });
+  }
+});
+
+//
+app.use((error, req, res, next) => {
+  console.error("❌ Error:", error.message);
+
+  if (error.name === "CastError") {
+    return res.status(400).json({ error: "Malformed ID" });
+  }
+
+  res.status(500).json({ error: "Internal Server Error" });
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
+
