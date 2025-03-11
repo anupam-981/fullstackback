@@ -1,52 +1,130 @@
-const express = require('express');
-const cors = require('cors');
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config();
+
+const PhonebookEntry = require("./models/phonebookentry");
+
 const app = express();
+app.use(express.json());
+app.use(cors());
 
-// Middleware
-app.use(express.json()); // Parse JSON request bodies
-app.use(cors()); // Enable CORS for frontend requests
+// ✅ Connect to MongoDB
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-let persons = [
-    { id: "1", name: "Arto Hellas", number: "040-123456" },
-    { id: "2", name: "Ada Lovelace", number: "39-44-5323523" },
-    { id: "3", name: "Dan Abramov", number: "12-43-234345" },
-    { id: "4", name: "Mary Poppendieck", number: "39-23-6423122" }
-];
+// ✅ GET all entries
+app.get("/api/persons", async (req, res) => {
+  try {
+    const entries = await PhonebookEntry.find({});
+    res.json(entries);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching contacts" });
+  }
+});
 
-// Generate a unique ID
-const generateId = () => Math.floor(Math.random() * 1000000).toString();
+// ✅ GET a single entry by ID
+app.get("/api/persons/:id", async (req, res, next) => {
+  try {
+    const entry = await PhonebookEntry.findById(req.params.id);
+    if (entry) {
+      res.json(entry);
+    } else {
+      res.status(404).json({ error: "Entry not found" });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
 
-// Route to get all phonebook entries
-app.get("/", (req, res) => {
-    res.send("Backend is running!");
-  });
-  
-
-// Route to add a new phonebook entry
-app.post('/api/persons', (req, res) => {
-    console.log('Incoming request:', req.body); // Debugging
-
+// ✅ POST a new entry
+app.post("/api/persons", async (req, res, next) => {
+  try {
     const { name, number } = req.body;
 
     if (!name || !number) {
-        return res.status(400).json({ error: 'Name and number are required' });
+      return res.status(400).json({ error: "Name and number are required!" });
     }
 
-    if (persons.find(p => p.name === name)) {
-        return res.status(400).json({ error: 'Name must be unique' });
+    const existingEntry = await PhonebookEntry.findOne({ name });
+    if (existingEntry) {
+      existingEntry.number = number;
+      const updatedEntry = await existingEntry.save();
+      return res.json(updatedEntry);
     }
 
-    const newPerson = {
-        id: generateId(),
-        name,
-        number
-    };
-
-    persons.push(newPerson);
-    res.status(201).json(newPerson);
+    const newEntry = new PhonebookEntry({ name, number });
+    const savedEntry = await newEntry.save();
+    res.status(201).json(savedEntry);
+  } catch (error) {
+    next(error);
+  }
 });
 
-const PORT = 3001;
+// ✅ PUT - Update an entry
+app.put("/api/persons/:id", async (req, res, next) => {
+  const { name, number } = req.body;
+
+  const updatedData = { name, number };
+  try {
+    const updatedEntry = await PhonebookEntry.findByIdAndUpdate(
+      req.params.id,
+      updatedData,
+      { new: true, runValidators: true, context: "query" }
+    );
+
+    if (!updatedEntry) {
+      return res.status(404).json({ error: "Entry not found" });
+    }
+
+    res.json(updatedEntry);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ✅ DELETE an entry
+app.delete("/api/persons/:id", async (req, res, next) => {
+  try {
+    const deletedEntry = await PhonebookEntry.findByIdAndDelete(req.params.id);
+
+    if (!deletedEntry) {
+      return res.status(404).json({ error: "Entry not found" });
+    }
+
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ✅ /info route
+app.get("/info", async (req, res) => {
+  try {
+    const count = await PhonebookEntry.countDocuments({});
+    res.send(`
+      <p>Phonebook has info for ${count} people</p>
+      <p>${new Date()}</p>
+    `);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching data" });
+  }
+});
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error("❌ Error:", error.message);
+
+  if (error.name === "CastError") {
+    return res.status(400).json({ error: "Malformed ID" });
+  }
+
+  res.status(500).json({ error: "Internal Server Error" });
+});
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
